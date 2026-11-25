@@ -7,7 +7,7 @@ service cloud.firestore {
 
     function isAdmin() {
       return isAuthenticated() && (
-        request.auth.token.email == 'admin@centrumchabowka.pl' ||
+        (request.auth.token.email_verified == true && request.auth.token.email == 'admin@centrumchabowka.pl') ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
       );
@@ -102,13 +102,14 @@ service cloud.firestore {
       allow read: if isAdmin() ||
         (resource.data.visible == true && resource.data.status in ['active', 'full']);
       allow create, delete: if isAdmin();
-      allow update: if isAdmin() || isSeatReservationUpdate() || isSeatReleaseUpdate();
+      // Seat mutations must be performed by a trusted backend or administrator.
+      allow update: if isAdmin();
     }
 
     match /users/{uid} {
       allow read: if isOwner(uid) || isAdmin();
-      allow create: if isOwner(uid);
-      allow update: if isOwner(uid) || isAdmin();
+      allow create: if isOwner(uid) && request.resource.data.get('role', 'user') == 'user';
+      allow update: if isAdmin() || (isOwner(uid) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']));
       allow delete: if isAdmin();
     }
 
